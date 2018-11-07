@@ -1,0 +1,24 @@
+{
+  "name": "circuit-co-edit",
+  "version": "1.0.0",
+  "description": "Type '/start co-edit' in a conversation to start a firepad document collaboration session either on an attachment or a new document",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "author": "Richard Fazzio <richard.fazzio@atos.net>",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.18.3",
+    "circuit-sdk": "^1.2.4101",
+    "express": "^4.16.4",
+    "express-session": "^1.15.6",
+    "file-api": "^0.10.4",
+    "firebase-admin": "^6.0.0",
+    "firepad": "^1.5.0",
+    "node-fetch": "^2.2.0",
+    "randomstring": "^1.1.5",
+    "simple-oauth2": "^2.2.1"
+  }
+}

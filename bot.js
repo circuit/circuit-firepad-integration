@@ -21,15 +21,15 @@ admin.initializeApp({
 
 const db = admin.database().ref(); // Reference to root of db
 const ref = db.child('sessions');  // Reference to local part of db
-var conversationsHashMap = {}; // Hash map to keep track of active sessions
+var sessions = {}; // Hash map to keep track of active sessions
 const host = `${config.host.url}:${config.host.port}`; // Url of host
 let client; // Client for bot
 
 // Deletes the session with key from the database and hash map
 async function endSession(key) {
-    if (conversationsHashMap[key]) {
+    if (sessions[key]) {
         await ref.child(key).child('document').remove();
-        delete conversationsHashMap[key];
+        delete sessions[key];
         console.log(`ENDED SESSION: ${key}`);
     }
 }
@@ -49,7 +49,7 @@ async function createSession(item) {
             const previousSession = res[1].val();
             const participants = conversation.participants;
             // Create a hash map of conversations being listened to
-            conversationsHashMap[conversation.convId] = {
+            sessions[conversation.convId] = {
                 convId: conversation.convId,
                 participants: participants,
                 creatorId: item.creatorId, // The creator of the session
@@ -72,7 +72,7 @@ async function createSession(item) {
                     defaultText = await resp.text();
                 }
             }
-            conversationsHashMap[conversation.convId].defaultText = defaultText; // will either be the default document or an empty firepad
+            sessions[conversation.convId].defaultText = defaultText; // will either be the default document or an empty firepad
             const firepadRef = ref.child(item.convId).child('document');
             const headless = new Firepad.Headless(firepadRef);
             headless.setText('', async (err, committed) => {
@@ -84,6 +84,7 @@ async function createSession(item) {
                     headless.dispose();
                     throw new Error('Error commiting the default text.');
                 }
+                sessions[item.convId].sessionEndedListener = createSessionEndedListener(item.convId);
                 const creator = await client.getUserById(item.creatorId); 
                 const content = {
                     parentId: item.parentItemId || item.itemId,
@@ -121,7 +122,7 @@ function addEventListeners() {
             // End session here if creator does it by the circuit conversation
             const snap = await ref.once('value');
             const exist = snap.child(item.convId).exists();
-            const session = conversationsHashMap[item.convId];
+            const session = sessions[item.convId];
             let content;
             if (exist && session) {
                 if (item.creatorId === session.creatorId) {
@@ -156,31 +157,30 @@ function addEventListeners() {
     // Keeps track of new users added to the conversation or removed for session permissions
     client.addEventListener('conversationUpdated', evt => { // where to initiate session
         const conversation = evt.conversation;
-        const session = conversationsHashMap[conversation.convId];
+        const session = sessions[conversation.convId];
         if (session) {
             if (conversation.participants.length !== session.participants.length) {
-                conversationsHashMap[conversation.convId].participants = conversation.participants;
+                sessions[conversation.convId].participants = conversation.participants;
             }
         }
     });
+}
 
-    // Listener to end sessions after a user joins a session, is deleted when the session is deleted
-    ref.on('child_added', childAdded => {
-        if (conversationsHashMap[childAdded.key]) {
-            const documentRef = ref.child(childAdded.key).child('document');
-            conversationsHashMap[childAdded.key].childRemovedListener = documentRef.on('child_removed', async snap => {
-                const exist = await ref.once('value');
-                if (snap.key === 'users' && exist.child(childAdded.key).hasChild('document')) {
-                    // The users branch was delete, meaning all users have left the session
-                    try {
-                        await uploadDocument(childAdded.key);
-                        await endSession(childAdded.key);
-                    } catch (err) {
-                        await client.addTextItem(childAdded.key, 'There was an error uploading the file.');
-                        console.error(err);
-                    }
-                }
-            });
+// Adds a istener to end sessions after a user joins a session, is deleted when the session is deleted
+// Key is convId
+function createSessionEndedListener(key) {
+    const documentRef = ref.child(key).child('document');
+    return documentRef.on('child_removed', async snap => {
+        const exist = await ref.once('value');
+        if (snap.key === 'users' && exist.child(key).hasChild('document')) {
+            // The users branch was delete, meaning all users have left the session
+            try {
+                await uploadDocument(key);
+                await endSession(key);
+            } catch (err) {
+                await client.addTextItem(key, 'There was an error uploading the file.');
+                console.error(err);
+            }
         }
     });
 }
@@ -195,7 +195,7 @@ function uploadDocument(convId) {
                 if (data && data.ops && data.ops.length) {
                     const newFileName = Date.now();
                     const filePath = `${__dirname}\\documents\\${newFileName}.txt`;
-                    const creator = await client.getUserById(conversationsHashMap[convId].creatorId);
+                    const creator = await client.getUserById(sessions[convId].creatorId);
                     const document = data.ops[0].text;
                     fs.writeFileSync(filePath, document);
                     const file = new File(filePath);
@@ -234,17 +234,18 @@ function loadConversations() {
         })
         .then(conversations => {
             conversations.forEach(conversation => {
-                conversationsHashMap[conversation.convId] = previousSessions[conversation.convId];
-                conversationsHashMap[conversation.convId].convId = conversation.convId;
-                conversationsHashMap[conversation.convId].participants = conversation.participants;
-                conversationsHashMap[conversation.convId].tokens = {}; // will make new tokens if users try to log in again
+                sessions[conversation.convId] = previousSessions[conversation.convId];
+                sessions[conversation.convId].convId = conversation.convId;
+                sessions[conversation.convId].participants = conversation.participants;
+                sessions[conversation.convId].tokens = {}; // will make new tokens if users try to log in again
+                sessions[conversation.convId].sessionEndedListener = createSessionEndedListener(conversation.convId);
             });
         });
 }
 
 // Session getter where the key is the convId
 function getSession(key) {
-    return conversationsHashMap[key];
+    return sessions[key];
 }
 
 // Creates a custom token for the user in firebase
@@ -253,7 +254,7 @@ function createTokenForUser(userId, convId) {
     return new Promise((resolve,reject) => {
         admin.auth().createCustomToken(userId, { convId: convId })
             .then(token => {
-                conversationsHashMap[convId].tokens[userId] = token;
+                sessions[convId].tokens[userId] = token;
                 resolve(token);
             })
             .catch(reject);

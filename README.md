@@ -21,5 +21,5 @@ Type `/start co-edit` in a conversation to start a firepad document collaboratio
 * Note: The bot must be a part of the conversation it is listening to.
 
 ## Demo
-You can view a demo of this application here.
+You can view a demo of this application here.<br>
 [![picture](https://img.youtube.com/vi/h9y7qKKCs-M/0.jpg)](https://www.youtube.com/watch?v=h9y7qKKCs-M)

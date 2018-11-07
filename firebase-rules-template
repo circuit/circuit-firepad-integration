@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "sessions": {
+        ".read": "auth !== null && root.child('sessions').hasChild(auth.token.convId)",
+        ".write": "auth !== null && root.child('sessions').child(auth.token.convId).hasChild('document')"
+    }
+  }
+}

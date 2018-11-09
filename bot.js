@@ -48,16 +48,18 @@ async function createSession(item) {
             const conversation = res[0];
             const previousSession = res[1].val();
             const participants = conversation.participants;
+            const timeCreated = Date.now();
             // Create a hash map of conversations being listened to
             sessions[conversation.convId] = {
                 convId: conversation.convId,
                 participants: participants,
                 creatorId: item.creatorId, // The creator of the session
-                tokens: {}  // Used to keep track of active tokens for firebase
+                tokens: {},  // Used to keep track of active tokens for firebase
+                sessionParticipants: {} // hash map of users who have joined the session
             }; 
             // Create a new session in firebase and send link to the users
             const sess = {
-                timeCreated: Date.now(),
+                timeCreated: timeCreated,
                 creatorId: item.creatorId,
                 previousSessionEndTime: previousSession && previousSession.timeCreated || null
             }
@@ -91,7 +93,8 @@ async function createSession(item) {
                     content: `Created group co-edit session managed by ${creator.displayName}. Click <a href="${host}/conversation/${conversation.convId}">here</a> to join the session.`
                 }
                 // Send user the link to the session
-                await client.addTextItem(conversation.convId, content);
+                const botItem = await client.addTextItem(conversation.convId, content);
+                sessions[conversation.convId].itemId = botItem.itemId;
                 headless.dispose(); 
             });
         } else {
@@ -189,6 +192,7 @@ function createSessionEndedListener(key) {
 function uploadDocument(convId) {
     return new Promise(async (resolve, reject) => {
         try {
+            const session = sessions[convId];
             const firepadRef = ref.child(convId).child('document');
             const headless = new Firepad.Headless(firepadRef);
             headless.getDocument(async data => {
@@ -199,11 +203,15 @@ function uploadDocument(convId) {
                     const document = data.ops[0].text;
                     fs.writeFileSync(filePath, document);
                     const file = new File(filePath);
+                    const endTime = Date.now();
+                    const duration = (endTime - session.timeCreated) / (60 * 1000);
+                    let participants = Object.keys(session.sessionParticipants).map(participant => session.sessionParticipants[participant]).join(', ') || null;
                     const content = {
-                        subject: `Co-edit session hosted by: ${creator.displayName}`,
+                        itemId: session.itemId,
+                        content: `Session has ended.\nSession creator: ${creator.displayName}.\n${participants ? `Participants: ${participants}.\n` : ''}Duration: ${duration > 1 ? Math.floor(duration) : Math.floor(duration * 60)} ${duration > 1 ? 'minutes' : 'seconds'}.`,
                         attachments: [file]
                     };
-                    await client.addTextItem(convId, content);
+                    await client.updateTextItem(content);
                     fs.unlink(filePath, err => {
                         if (err) {
                             reject(err);
@@ -212,7 +220,11 @@ function uploadDocument(convId) {
                         resolve();
                     });
                 } else {
-                    await client.addTextItem(convId, `The document was empty.`);
+                    const content = {
+                        itemId: session.itemId,
+                        content: 'The session ended with an empty document.'
+                    }
+                    await client.updateTextItem(content);
                     resolve();
                 }
             });
@@ -241,6 +253,13 @@ function loadConversations() {
                 sessions[conversation.convId].sessionEndedListener = createSessionEndedListener(conversation.convId);
             });
         });
+}
+
+// Adds a user to the sessionParticipants hash map, 
+function participantJoined(key, user) {
+    if (sessions[key]) {
+        sessions[key].sessionParticipants[user.userId] = user.displayName || user.firstName;
+    }
 }
 
 // Session getter where the key is the convId
@@ -275,5 +294,6 @@ module.exports = {
     getSession: getSession,
     uploadDocument: uploadDocument,
     endSession: endSession,
-    createTokenForUser: createTokenForUser
+    createTokenForUser: createTokenForUser,
+    participantJoined: participantJoined
 }

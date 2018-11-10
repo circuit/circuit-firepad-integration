@@ -13,6 +13,7 @@ const fetch = require('node-fetch');
 const Circuit = require('circuit-sdk');
 const config  = require('./config.json');
 
+
 // Initalize the firebase admin app
 admin.initializeApp({
     databaseURL: config.admin.databaseURL,
@@ -20,7 +21,7 @@ admin.initializeApp({
 });
 
 const db = admin.database().ref(); // Reference to root of db
-const ref = db.child('sessions');  // Reference to local part of db
+let ref; // Reference to local part of db
 var sessions = {}; // Hash map to keep track of active sessions
 const host = `${config.host.url}:${config.host.port}`; // Url of host
 let client; // Client for bot
@@ -51,6 +52,7 @@ async function createSession(item) {
             const timeCreated = Date.now();
             // Create a hash map of conversations being listened to
             sessions[conversation.convId] = {
+                timeCreated: timeCreated,
                 convId: conversation.convId,
                 participants: participants,
                 creatorId: item.creatorId, // The creator of the session
@@ -169,8 +171,7 @@ function addEventListeners() {
     });
 }
 
-// Adds a istener to end sessions after a user joins a session, is deleted when the session is deleted
-// Key is convId
+// Adds a istener to end sessions after a user joins a session, is deleted when the session is deleted with key as convId
 function createSessionEndedListener(key) {
     const documentRef = ref.child(key).child('document');
     return documentRef.on('child_removed', async snap => {
@@ -205,7 +206,7 @@ function uploadDocument(convId) {
                     const file = new File(filePath);
                     const endTime = Date.now();
                     const duration = (endTime - session.timeCreated) / (60 * 1000);
-                    let participants = Object.keys(session.sessionParticipants).map(participant => session.sessionParticipants[participant]).join(', ') || null;
+                    const participants = session.sessionParticipants && Object.keys(session.sessionParticipants).map(participant => session.sessionParticipants[participant]).join(', ') || null;
                     const content = {
                         itemId: session.itemId,
                         content: `Session has ended.\nSession creator: ${creator.displayName}.\n${participants ? `Participants: ${participants}.\n` : ''}Duration: ${duration > 1 ? Math.floor(duration) : Math.floor(duration * 60)} ${duration > 1 ? 'minutes' : 'seconds'}.`,
@@ -222,7 +223,7 @@ function uploadDocument(convId) {
                 } else {
                     const content = {
                         itemId: session.itemId,
-                        content: 'The session ended with an empty document.'
+                        content: 'The session ended without the document being edited.'
                     }
                     await client.updateTextItem(content);
                     resolve();
@@ -234,6 +235,7 @@ function uploadDocument(convId) {
         }
     });
 }
+
 // Loads sessions into hashmap if bot is restarted
 function loadConversations() {
     let previousSessions;
@@ -255,7 +257,7 @@ function loadConversations() {
         });
 }
 
-// Adds a user to the sessionParticipants hash map, 
+// Adds a user to the sessionParticipants hash map 
 function participantJoined(key, user) {
     if (sessions[key]) {
         sessions[key].sessionParticipants[user.userId] = user.displayName || user.firstName;
@@ -280,10 +282,22 @@ function createTokenForUser(userId, convId) {
     });
 }
 
+function getSessionRef() {
+    return db.once('value')
+        .then(snap => {
+            const data = snap.val();
+            if (!data || !data.sessions) {
+                return db.child('sessions').set({ created: true });
+            }
+        })
+        .then(() => ref = db.child('sessions'))
+        .catch(console.error);
+}
 // Initalize the bot 
 function initialize() {
     client = new Circuit.Client(config.bot);;
     return client.logon()
+        .then(() => getSessionRef())
         .then(() => loadConversations())
         .then(() => addEventListeners())
         .then(() => console.log('Bot is successfully launched.'));

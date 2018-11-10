@@ -98,6 +98,7 @@ app.get('/oauthCallback', async (req, res) => {
                 req.session.token = await bot.createTokenForUser(user.userId, req.session.convId);
             }
             req.session.userId = user.userId;
+            bot.participantJoined(req.session.convId, user);
             res.redirect(`/conversation/${req.session.convId}/session`);
         } else {
             // Redirect user to unauthorized page

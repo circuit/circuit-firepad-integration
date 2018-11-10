@@ -51,6 +51,7 @@ async function createSession(item) {
             const timeCreated = Date.now();
             // Create a hash map of conversations being listened to
             sessions[conversation.convId] = {
+                timeCreated: timeCreated,
                 convId: conversation.convId,
                 participants: participants,
                 creatorId: item.creatorId, // The creator of the session
@@ -205,7 +206,7 @@ function uploadDocument(convId) {
                     const file = new File(filePath);
                     const endTime = Date.now();
                     const duration = (endTime - session.timeCreated) / (60 * 1000);
-                    let participants = Object.keys(session.sessionParticipants).map(participant => session.sessionParticipants[participant]).join(', ') || null;
+                    const participants = session.sessionParticipants && Object.keys(session.sessionParticipants).map(participant => session.sessionParticipants[participant]).join(', ') || null;
                     const content = {
                         itemId: session.itemId,
                         content: `Session has ended.\nSession creator: ${creator.displayName}.\n${participants ? `Participants: ${participants}.\n` : ''}Duration: ${duration > 1 ? Math.floor(duration) : Math.floor(duration * 60)} ${duration > 1 ? 'minutes' : 'seconds'}.`,
@@ -234,6 +235,7 @@ function uploadDocument(convId) {
         }
     });
 }
+
 // Loads sessions into hashmap if bot is restarted
 function loadConversations() {
     let previousSessions;
@@ -255,7 +257,7 @@ function loadConversations() {
         });
 }
 
-// Adds a user to the sessionParticipants hash map, 
+// Adds a user to the sessionParticipants hash map 
 function participantJoined(key, user) {
     if (sessions[key]) {
         sessions[key].sessionParticipants[user.userId] = user.displayName || user.firstName;

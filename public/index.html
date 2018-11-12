@@ -28,22 +28,21 @@
           </div>
         </div>
         <div v-if="loaded && !sessionEnded" >
-          <!-- <div class="align-content-left"> -->
             <div class="standard-greeting">
                 <p>Everyone viewing this document can edit it! 
                   <br> 
                   When the session ends it will be uploaded to the conversation in Circuit.
                 </p>
             </div>
-              <div class="creator-container" v-if="isCreator">
-                  <small>
-                      As the creator of this session you can end it by clicking the button below. You can also end the session by typing "/stop co-edit" in the conversation in circuit.
-                      The session will also end when everyone closes the session.
-                  </small>
-                  <div class="text-right">
-                    <button class="btn btn-danger btn-sm" @click="endSession">End</button>
-                  </div>
-              </div>
+            <div class="creator-container" v-if="isCreator">
+                <small>
+                    As the creator of this session you can end it by clicking the button below. You can also end the session by typing "/stop co-edit" in the conversation in circuit.
+                    The session will also end when everyone closes the session.
+                </small>
+                <div class="text-right">
+                  <button class="btn btn-danger btn-sm" @click="endSession">End</button>
+                </div>
+            </div>
           <hr>
           <div class="co-edit-container">
             <small>Text File</small>

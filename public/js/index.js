@@ -58,12 +58,14 @@ var app = new Vue({
         .catch(console.error);
     },
     endSession: function () {
+      debugger;
       fetch('/closesesssion', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        }
+        },
+        body: JSON.stringify({ convId: this.convId })
       })
       .then(res => res.json())
       .then(success => console.log('Response from server', success))

@@ -42,7 +42,7 @@ app.use(Session({
 // Where the application will be hosted
 app.get('/conversation/:convId/session', (req, res) => {
     const session = bot.getSession(req.session.convId);
-    if (session && session.participants.includes(req.session.userId) && session.tokens[req.session.userId] && usersAuthenticatedHashmap[req.userId]) {
+    if (session && session.participants.includes(req.session.userId) && usersAuthenticatedHashmap[req.sessiion.userId].firebaseToken === req.session.token) {
         res.redirect('/');
     } else {
         res.redirect('reject.html');
@@ -54,7 +54,8 @@ app.get('/conversation/:convId', (req, res) => {
     const convId = req.params.convId;
     const session = bot.getSession(convId);
     if (session) {
-        if (req.session.token && session.tokens[req.session.userId] && session.participants.includes(req.session.userId) && usersAuthenticatedHashmap[req.session.userId]) {
+        if (req.session.token && session.participants.includes(req.session.userId) && usersAuthenticatedHashmap[req.session.userId].firebaseToken === req.session.token) {
+            req.session.convId = convId;
             bot.addUserToSessionParticipants(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
             res.redirect(`/conversation/${convId}/session`);
         } else  {
@@ -100,9 +101,10 @@ app.get('/oauthCallback', async (req, res) => {
         };
         const session = bot.getSession(req.session.convId);
         if (session && session.participants.includes(user.userId)) {
-            if (!req.session.token || req.session.token !== session.tokens[user.userId]) {
+            if (!req.session.token) {
                 // Token doesn't match the token in the hash map, create a new one for user
-                req.session.token = await bot.createTokenForUser(user.userId, req.session.convId);
+                req.session.token = await bot.createTokenForUser(user.userId);
+                usersAuthenticatedHashmap[user.userId].firebaseToken = req.session.token;
             }
             req.session.userId = user.userId;
             bot.addUserToSessionParticipants(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
@@ -123,11 +125,12 @@ app.get('/oauthCallback', async (req, res) => {
 
 // Close the current session from the creator
 app.post('/closesesssion', async (req, res) => {
-    const session = bot.getSession(req.session.convId);
-    if (session && req.session.userId === session.creatorId && req.session.token === session.tokens[req.session.userId]) {
+    const data = req.body;
+    const session = bot.getSession(data.convId);
+    if (session && data && data.convId && req.session.userId === session.creatorId && req.session.token === usersAuthenticatedHashmap[req.session.userId].firebaseToken) {
         try {
-            await bot.uploadDocument(req.session.convId);
-            await bot.endSession(req.session.convId);
+            await bot.uploadDocument(data.convId);
+            await bot.endSession(data.convId);
             res.status(200).send({ success: true });
         } catch (err) {
             res.status(400).send({ message: 'There was an error trying to close the session.', error: err});
@@ -140,7 +143,7 @@ app.post('/closesesssion', async (req, res) => {
 // Gets the session data for client
 app.get('/getsession', (req, res) => {
     const session = bot.getSession(req.session.convId);
-    if (session && session.tokens[req.session.userId]) {
+    if (session && usersAuthenticatedHashmap[req.session.userId].firebaseToken === req.session.token) {
         // The session exists and the user has access to the conversation
         const data = {
             authenticated: true,

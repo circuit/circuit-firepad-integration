@@ -28,14 +28,21 @@ let ref; // Reference to local part of db
 let client; // Client for bot
 
 // Deletes the session with key from the database and hash map
-async function endSession(key) {
-    try {
-        await ref.child(key).child('document').remove();
-        delete sessions[key];
-        console.log(`ENDED SESSION: ${key}`);
-    } catch (error) {
-        console.error(error);
-    }
+function endSession(key) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            if (sessions[key]) {
+                delete sessions[key];
+            }
+            const sessionRef = await ref.child(key).once('value');
+            if (sessionRef.child('document').exists()) {
+                await ref.child(key).child('document').remove();
+            }
+            resolve()
+        } catch (error) {
+            reject(error);
+        }
+    });
 }
 
 // Creates a new session if it does not exist or links them to the current session if it does
@@ -43,8 +50,9 @@ async function createSession(item) {
     try {
         const snap = await ref.once('value');
         const exist = snap.child(item.convId).child('document').exists();
+        const session = sessions[item.convId];
         // If the session already exists in firebase
-        if (!exist && !sessions[item.convId]) {
+        if (!exist && !session) {
             const res = await Promise.all([
                 client.getConversationById(item.convId),
                 ref.child(item.convId).once('value')
@@ -58,7 +66,7 @@ async function createSession(item) {
                 timeCreated: timeCreated,
                 participants: participants,
                 creatorId: item.creatorId, // The creator of the session
-                tokens: {},  // Used to keep track of active tokens for firebase
+                // tokens: {},  // Used to keep track of active tokens for firebase
                 sessionParticipants: {} // Hash map of users who have joined the session
             };
             // Create a new session in firebase and send link to the users
@@ -102,16 +110,32 @@ async function createSession(item) {
                 headless.dispose();
             });
         } else {
-            const content = {
-                parentId: item.parentItemId || item.itemId,
-                content: `That session already exists, only one session per conversation can be active. Click <a href="${host}/conversation/${item.convId}">here</a> to join the session.`
+            let content;
+            if (session) {
+                content = {
+                    parentId: item.parentItemId || item.itemId,
+                    content: `That session already exists, only one session per conversation can be active. Click <a href="${host}/conversation/${item.convId}">here</a> to join the session.`
+                }
+            } else {
+                // Session exists in database but not in bots cache
+                // Session must be terminated, but must have been restarted while a session was running
+                await endSession(item.convId);
+                content = {
+                    parentId: item.parentItemId || item.itemId,
+                    content: 'There was an error session not found in cache, session terminated. This is likely due to a server failure, please try again.'
+                };
             }
-            // Send user the link to the session
+            // Send response to user
             await client.addTextItem(item.convId, content);
         }
     } catch (e) {
         // If something went wrong
         console.error(e);
+        const content = {
+            parentId: item.parentItemId || item.itemId,
+            content: 'There was an error in starting the session.'
+        }
+        await client.addTextItem(item.convId, content);
     }
 }
 
@@ -128,7 +152,6 @@ function addEventListeners() {
         } else if (item.text.content.startsWith('/stop co-edit')) {
             // End session here if creator does it by the circuit conversation
             const snap = await ref.once('value');
-            console.log(snap.val());
             const exist = snap.child(item.convId).child('document').exists();
             const session = sessions[item.convId];
             let content;
@@ -138,7 +161,7 @@ function addEventListeners() {
                     if (!session) {
                         // Session exists in database but not in bots cache
                         // Session must be terminated, but must have been restarted while a session was running
-                        endSession(item.convId);
+                        await endSession(item.convId);
                         content = {
                             parentId: item.parentItemId || item.itemId,
                             content: 'There was an error session not found in cache, session terminated.'
@@ -191,7 +214,7 @@ function createSessionEndedListener(key) {
     const documentRef = ref.child(key).child('document');
     return documentRef.on('child_removed', async snap => {
         const exist = await ref.once('value');
-        if (snap.key === 'users' && exist.child(key).hasChild('document')) {
+        if (snap.key === 'users' && exist.child(key).hasChild('document') && sessions[key]) {
             // The users branch was delete, meaning all users have left the session
             try {
                 await uploadDocument(key);
@@ -260,17 +283,15 @@ function getSession(key) {
 
 // Creates a custom token for the user in firebase
 // Sets the auth().uid to their circuit userId and grants permissions based on the convId
-function createTokenForUser(userId, convId) {
-    return new Promise((resolve,reject) => {
-        admin.auth().createCustomToken(userId, { convId: convId })
-            .then(token => {
-                sessions[convId].tokens[userId] = token;
-                resolve(token);
-            })
+function createTokenForUser(userId) {
+    return new Promise((resolve, reject) => {
+        admin.auth().createCustomToken(userId)
+            .then(resolve)
             .catch(reject);
     });
 }
 
+// Gets the Sessions ref from database, if it does not exist will create one
 function getSessionRef() {
     return db.once('value')
         .then(snap => {
@@ -282,6 +303,7 @@ function getSessionRef() {
         .then(() => ref = db.child('sessions'))
         .catch(console.error);
 }
+
 // Initalize the bot
 function initialize() {
     client = new Circuit.Client(config.bot);;

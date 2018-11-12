@@ -291,24 +291,18 @@ function createTokenForUser(userId) {
     });
 }
 
-// Gets the Sessions ref from database, if it does not exist will create one
-function getSessionRef() {
+// Resets the database and returns a new ref for sessions
+function resetDatabase() {
     return db.once('value')
-        .then(snap => {
-            const data = snap.val();
-            if (!data || !data.sessions) {
-                return db.child('sessions').set({ created: true });
-            }
-        })
-        .then(() => ref = db.child('sessions'))
-        .catch(console.error);
+        .then(() => db.child('sessions').set({ created: true }))
+        .then(() => ref = db.child('sessions'));
 }
 
 // Initalize the bot
 function initialize() {
     client = new Circuit.Client(config.bot);;
     return client.logon()
-        .then(() => getSessionRef())
+        .then(() => resetDatabase())
         .then(() => addEventListeners())
         .then(() => console.log('Bot is successfully launched.'));
 }

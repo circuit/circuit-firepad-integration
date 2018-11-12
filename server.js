@@ -15,7 +15,7 @@ const INVALID_REQUEST = 'Sorry you are not authorized to view this session...';
 // OAuth2 redirect uri
 const PORT = process.env.PORT || config.host.port;
 const redirectUri = `${config.host.url}${config.host.port ? ':' + PORT : ''}/oauthCallback`;
-const usersAuthenticatedHashmap = {}; // Users haskmap for alreayd authenticated users
+const usersAuthenticatedHashmap = {}; // Users haskmap for already authenticated users
 // simple-oauth2 configuration
 const oauth2 = OAuth2.create({
   client: {

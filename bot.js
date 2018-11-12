@@ -254,7 +254,7 @@ function loadConversations() {
 }
 
 // Adds a user to the sessionParticipants hash map
-function participantJoined(key, userId, displayName) {
+function addUserToSessionParticipants(key, userId, displayName) {
     if (sessions[key]) {
         sessions[key].sessionParticipants[userId] = displayName;
     }
@@ -305,5 +305,5 @@ module.exports = {
     uploadDocument: uploadDocument,
     endSession: endSession,
     createTokenForUser: createTokenForUser,
-    participantJoined: participantJoined
+    addUserToSessionParticipants: addUserToSessionParticipants
 }

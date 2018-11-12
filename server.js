@@ -54,7 +54,7 @@ app.get('/conversation/:convId', (req, res) => {
     const session = bot.getSession(convId);
     if (session) {
         if (req.session.token && session.tokens[req.session.userId] && session.participants.includes(req.session.userId) && usersAuthenticatedHashmap[req.session.userId]) {
-            bot.participantJoined(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
+            bot.addUserToSessionParticipants(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
             res.redirect(`/conversation/${convId}/session`);
         } else  {
             // Create state parameter to prevent CSRF attacks. Save in session.
@@ -104,7 +104,7 @@ app.get('/oauthCallback', async (req, res) => {
                 req.session.token = await bot.createTokenForUser(user.userId, req.session.convId);
             }
             req.session.userId = user.userId;
-            bot.participantJoined(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
+            bot.addUserToSessionParticipants(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
             res.redirect(`/conversation/${req.session.convId}/session`);
         } else {
             // Redirect user to unauthorized page
@@ -125,8 +125,8 @@ app.post('/closesesssion', async (req, res) => {
     const session = bot.getSession(req.session.convId);
     if (session && req.session.userId === session.creatorId && req.session.token === session.tokens[req.session.userId]) {
         try {
-            await bot.uploadDocument(session.convId);
-            await bot.endSession(session.convId);
+            await bot.uploadDocument(req.session.convId);
+            await bot.endSession(req.session.convId);
             res.status(200).send({ success: true });
         } catch (err) {
             res.status(400).send({ message: 'There was an error trying to close the session.', error: err});

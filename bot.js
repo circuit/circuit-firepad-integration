@@ -26,10 +26,12 @@ let client; // Client for bot
 
 // Deletes the session with key from the database and hash map
 async function endSession(key) {
-    if (sessions[key]) {
+    try {
         await ref.child(key).child('document').remove();
         delete sessions[key];
         console.log(`ENDED SESSION: ${key}`);
+    } catch (error) {
+        console.error(error);
     }
 }
 
@@ -39,7 +41,7 @@ async function createSession(item) {
         const snap = await ref.once('value');
         const exist = snap.child(item.convId).child('document').exists();
         // If the session already exists in firebase
-        if (!exist) {
+        if (!exist && !sessions[item.convId]) {
             const res = await Promise.all([
                 client.getConversationById(item.convId),
                 ref.child(item.convId).once('value')
@@ -51,12 +53,11 @@ async function createSession(item) {
             // Create a hash map of conversations being listened to
             sessions[conversation.convId] = {
                 timeCreated: timeCreated,
-                convId: conversation.convId,
                 participants: participants,
                 creatorId: item.creatorId, // The creator of the session
                 tokens: {},  // Used to keep track of active tokens for firebase
-                sessionParticipants: {} // hash map of users who have joined the session
-            }; 
+                sessionParticipants: {} // Hash map of users who have joined the session
+            };
             // Create a new session in firebase and send link to the users
             const sess = {
                 timeCreated: timeCreated,
@@ -124,21 +125,34 @@ function addEventListeners() {
         } else if (item.text.content.startsWith('/stop co-edit')) {
             // End session here if creator does it by the circuit conversation
             const snap = await ref.once('value');
-            const exist = snap.child(item.convId).exists();
+            console.log(snap.val());
+            const exist = snap.child(item.convId).child('document').exists();
             const session = sessions[item.convId];
             let content;
-            if (exist && session) {
-                if (item.creatorId === session.creatorId) {
-                    try {
-                        await uploadDocument(item.convId);
-                        await endSession(item.convId);
-                    } catch (err) {
+            if (exist) {
+                const data = snap.val();
+                if (item.creatorId === data[item.convId].creatorId) {
+                    if (!session) {
+                        // Session exists in database but not in bots cache
+                        // Session must be terminated, but must have been restarted while a session was running
+                        endSession(item.convId);
                         content = {
                             parentId: item.parentItemId || item.itemId,
-                            content: 'There was an error ending the session'
+                            content: 'There was an error session not found in cache, session terminated.'
                         };
-                        console.error(err);
+                    } else {
+                        try {
+                            await uploadDocument(item.convId);
+                            await endSession(item.convId);
+                        } catch (err) {
+                            content = {
+                                parentId: item.parentItemId || item.itemId,
+                                content: 'There was an error ending the session'
+                            };
+                            console.error(err);
+                        }
                     }
+
                 } else {
                     content = {
                         parentId: item.parentItemId || item.itemId,
@@ -229,29 +243,8 @@ function uploadDocument(convId) {
     });
 }
 
-// Loads sessions into hashmap if bot is restarted
-function loadConversations() {
-    let previousSessions;
-    return ref.once('value')
-        .then(snap => {
-            previousSessions = snap.val();
-            // If there is a document then it is an active session
-            let keys = Object.keys(previousSessions).filter(key => previousSessions[key].document);
-            return keys && keys.length ? client.getConversationsByIds(keys) : [];
-        })
-        .then(conversations => {
-            conversations.forEach(conversation => {
-                sessions[conversation.convId] = previousSessions[conversation.convId];
-                sessions[conversation.convId].convId = conversation.convId;
-                sessions[conversation.convId].participants = conversation.participants;
-                sessions[conversation.convId].tokens = {}; // will make new tokens if users try to log in again
-                sessions[conversation.convId].sessionEndedListener = createSessionEndedListener(conversation.convId);
-            });
-        });
-}
-
 // Adds a user to the sessionParticipants hash map 
-function participantJoined(key, userId, displayName) {
+function addUserToSessionParticipants(key, userId, displayName) {
     if (sessions[key]) {
         sessions[key].sessionParticipants[userId] = displayName;
     }
@@ -291,7 +284,6 @@ function initialize() {
     client = new Circuit.Client(config.bot);;
     return client.logon()
         .then(() => getSessionRef())
-        .then(() => loadConversations())
         .then(() => addEventListeners())
         .then(() => console.log('Bot is successfully launched.'));
 }
@@ -302,5 +294,5 @@ module.exports = {
     uploadDocument: uploadDocument,
     endSession: endSession,
     createTokenForUser: createTokenForUser,
-    participantJoined: participantJoined
+    addUserToSessionParticipants: addUserToSessionParticipants
 }

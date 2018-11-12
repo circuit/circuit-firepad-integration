@@ -19,9 +19,12 @@ admin.initializeApp({
 });
 
 const db = admin.database().ref(); // Reference to root of db
+const sessions = {}; // Hash map to keep track of active sessions
+
+// Only include port if defined
+const host = config.host.port ? `${config.host.url}:${config.host.port}` : config.host.url;
+
 let ref; // Reference to local part of db
-var sessions = {}; // Hash map to keep track of active sessions
-const host = `${config.host.url}:${config.host.port}`; // Url of host
 let client; // Client for bot
 
 // Deletes the session with key from the database and hash map
@@ -56,7 +59,7 @@ async function createSession(item) {
                 creatorId: item.creatorId, // The creator of the session
                 tokens: {},  // Used to keep track of active tokens for firebase
                 sessionParticipants: {} // hash map of users who have joined the session
-            }; 
+            };
             // Create a new session in firebase and send link to the users
             const sess = {
                 timeCreated: timeCreated,
@@ -87,7 +90,7 @@ async function createSession(item) {
                     throw new Error('Error commiting the default text.');
                 }
                 sessions[item.convId].sessionEndedListener = createSessionEndedListener(item.convId);
-                const creator = await client.getUserById(item.creatorId); 
+                const creator = await client.getUserById(item.creatorId);
                 const content = {
                     parentId: item.parentItemId || item.itemId,
                     content: `Created group co-edit session managed by ${creator.displayName}. Click <a href="${host}/conversation/${conversation.convId}">here</a> to join the session.`
@@ -95,7 +98,7 @@ async function createSession(item) {
                 // Send user the link to the session
                 const botItem = await client.addTextItem(conversation.convId, content);
                 sessions[conversation.convId].itemId = botItem.itemId;
-                headless.dispose(); 
+                headless.dispose();
             });
         } else {
             const content = {
@@ -250,7 +253,7 @@ function loadConversations() {
         });
 }
 
-// Adds a user to the sessionParticipants hash map 
+// Adds a user to the sessionParticipants hash map
 function participantJoined(key, userId, displayName) {
     if (sessions[key]) {
         sessions[key].sessionParticipants[userId] = displayName;
@@ -286,7 +289,7 @@ function getSessionRef() {
         .then(() => ref = db.child('sessions'))
         .catch(console.error);
 }
-// Initalize the bot 
+// Initalize the bot
 function initialize() {
     client = new Circuit.Client(config.bot);;
     return client.logon()

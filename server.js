@@ -13,7 +13,8 @@ const app = express();
 const INVALID_REQUEST = 'Sorry you are not authorized to view this session...';
 
 // OAuth2 redirect uri
-const redirectUri = `${config.host.url}:${process.env.PORT || config.host.port}/oauthCallback`;
+const PORT = process.env.PORT || config.host.port;
+const redirectUri = `${config.host.url}${config.host.port ? ':' + PORT : ''}/oauthCallback`;
 const usersAuthenticatedHashmap = {}; // Users haskmap for alreayd authenticated users
 // simple-oauth2 configuration
 const oauth2 = OAuth2.create({
@@ -39,7 +40,7 @@ app.use(Session({
 }));
 
 // Where the application will be hosted
-app.get('/conversation/:convId/session', (req, res) => { 
+app.get('/conversation/:convId/session', (req, res) => {
     const session = bot.getSession(req.session.convId);
     if (session && session.participants.includes(req.session.userId) && session.tokens[req.session.userId] && usersAuthenticatedHashmap[req.userId]) {
         res.redirect('/');

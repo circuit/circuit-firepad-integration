@@ -14,6 +14,7 @@ const INVALID_REQUEST = 'Sorry you are not authorized to view this session...';
 
 // OAuth2 redirect uri
 const redirectUri = `${config.host.url}:${process.env.PORT || config.host.port}/oauthCallback`;
+const usersAuthenticatedHashmap = {}; // Users haskmap for alreayd authenticated users
 // simple-oauth2 configuration
 const oauth2 = OAuth2.create({
   client: {
@@ -40,7 +41,7 @@ app.use(Session({
 // Where the application will be hosted
 app.get('/conversation/:convId/session', (req, res) => { 
     const session = bot.getSession(req.session.convId);
-    if (session && session.participants.includes(req.session.userId) && session.tokens[req.session.userId]) {
+    if (session && session.participants.includes(req.session.userId) && session.tokens[req.session.userId] && usersAuthenticatedHashmap[req.userId]) {
         res.redirect('/');
     } else {
         res.redirect('reject.html');
@@ -52,7 +53,8 @@ app.get('/conversation/:convId', (req, res) => {
     const convId = req.params.convId;
     const session = bot.getSession(convId);
     if (session) {
-        if (req.session.token && session.tokens[req.session.userId] && session.participants.includes(req.session.userId)) {
+        if (req.session.token && session.tokens[req.session.userId] && session.participants.includes(req.session.userId) && usersAuthenticatedHashmap[req.session.userId]) {
+            bot.participantJoined(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
             res.redirect(`/conversation/${convId}/session`);
         } else  {
             // Create state parameter to prevent CSRF attacks. Save in session.
@@ -91,6 +93,10 @@ app.get('/oauthCallback', async (req, res) => {
         const user = await fetch(`https://${config.bot.domain}/rest/v2/users/profile`, {
           headers: { 'Authorization': 'Bearer ' +  token.access_token}
         }).then(res => res.json());
+        usersAuthenticatedHashmap[user.userId] = {
+            token: token,
+            displayName: user.displayName || user.firstName
+        };
         const session = bot.getSession(req.session.convId);
         if (session && session.participants.includes(user.userId)) {
             if (!req.session.token || req.session.token !== session.tokens[user.userId]) {
@@ -98,7 +104,7 @@ app.get('/oauthCallback', async (req, res) => {
                 req.session.token = await bot.createTokenForUser(user.userId, req.session.convId);
             }
             req.session.userId = user.userId;
-            bot.participantJoined(req.session.convId, user);
+            bot.participantJoined(req.session.convId, req.session.userId, usersAuthenticatedHashmap[req.session.userId].displayName);
             res.redirect(`/conversation/${req.session.convId}/session`);
         } else {
             // Redirect user to unauthorized page

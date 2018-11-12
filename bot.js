@@ -7,14 +7,11 @@
 const admin = require('firebase-admin');
 const FileAPI = require('file-api');
 const File = FileAPI.File;
-const fs = require('fs');
 const Firepad = require('firepad');
 const fetch = require('node-fetch');
 const Circuit = require('circuit-sdk');
 const config  = require('./config.json');
-const FileUpload = require('./node_modules/circuit-sdk/FileUpload');
 
-let fileupload;
 // Initalize the firebase admin app
 admin.initializeApp({
     databaseURL: config.admin.databaseURL,
@@ -199,36 +196,23 @@ function uploadDocument(convId) {
             const headless = new Firepad.Headless(firepadRef);
             headless.getDocument(async data => {
                 if (data && data.ops && data.ops.length) {
-                    const newFileName = Date.now();
-                    const filePath = `${__dirname}\\documents\\${newFileName}.txt`;
                     const creator = await client.getUserById(sessions[convId].creatorId);
                     const document = data.ops[0].text;
-                    // fs.writeFileSync(filePath, document);
-                    // const file = new File(filePath);
+                    const endTime = Date.now();
                     const file = new File({
-                        name: `${newFileName}`,
+                        name: endTime.toString(),
                         type: 'text/plain',
                         buffer: new Buffer(document)
                     });
-                    const res = await fileupload.uploadFiles([file]);
-                    console.log(res);
-                    const endTime = Date.now();
                     const duration = (endTime - session.timeCreated) / (60 * 1000);
                     const participants = session.sessionParticipants && Object.keys(session.sessionParticipants).map(participant => session.sessionParticipants[participant]).join(', ') || null;
                     const content = {
                         itemId: session.itemId,
                         content: `Session has ended.\nSession creator: ${creator.displayName}.\n${participants ? `Participants: ${participants}.\n` : ''}Duration: ${duration > 1 ? Math.floor(duration) : Math.floor(duration * 60)} ${duration > 1 ? 'minutes' : 'seconds'}.`,
-                        attachments: res
+                        attachments: [file]
                     };
                     await client.updateTextItem(content);
                     resolve();
-                    // fs.unlink(filePath, err => {
-                    //     if (err) {
-                    //         reject(err);
-                    //         return;
-                    //     }
-                    //     resolve();
-                    // });
                 } else {
                     const content = {
                         itemId: session.itemId,
@@ -267,9 +251,9 @@ function loadConversations() {
 }
 
 // Adds a user to the sessionParticipants hash map 
-function participantJoined(key, user) {
+function participantJoined(key, userId, displayName) {
     if (sessions[key]) {
-        sessions[key].sessionParticipants[user.userId] = user.displayName || user.firstName;
+        sessions[key].sessionParticipants[userId] = displayName;
     }
 }
 
@@ -306,7 +290,6 @@ function getSessionRef() {
 function initialize() {
     client = new Circuit.Client(config.bot);;
     return client.logon()
-        .then(() => fileupload = new FileUpload({ domain: client.domain, cookie: client.getCookie() }))
         .then(() => getSessionRef())
         .then(() => loadConversations())
         .then(() => addEventListeners())

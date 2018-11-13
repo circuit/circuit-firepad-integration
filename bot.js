@@ -240,7 +240,7 @@ function uploadDocument(convId) {
                     const document = data.ops[0].text;
                     const endTime = Date.now();
                     const file = new File({
-                        name: endTime.toString(),
+                        name: `${endTime.toString()}.txt`,
                         type: 'text/plain',
                         buffer: new Buffer(document)
                     });
@@ -248,7 +248,7 @@ function uploadDocument(convId) {
                     const participants = session.sessionParticipants && Object.keys(session.sessionParticipants).map(participant => session.sessionParticipants[participant]).join(', ') || null;
                     const content = {
                         itemId: session.itemId,
-                        content: `Session has ended.\nSession creator: ${creator.displayName}.\n${participants ? `Participants: ${participants}.\n` : ''}Duration: ${duration > 1 ? Math.floor(duration) : Math.floor(duration * 60)} ${duration > 1 ? 'minutes' : 'seconds'}.`,
+                        content: `Session has ended\nSession creator: <b>${creator.displayName}</b>\n${participants ? `Participants: <b>${participants}</b>\n` : ''}Duration: <b>${duration > 1 ? Math.floor(duration) : Math.floor(duration * 60)} ${duration > 1 ? 'minutes</b>' : 'seconds</b>'}`,
                         attachments: [file]
                     };
                     await client.updateTextItem(content);

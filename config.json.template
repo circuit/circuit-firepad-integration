@@ -22,7 +22,8 @@
     "bot": {
         "domain": "circuitsandbox.net",
         "client_id": "your_client_id",
-        "client_secret": "your_client_secret"
+        "client_secret": "your_client_secret",
+        "scope": "READ_CONVERSATIONS,WRITE_CONVERSATIONS,READ_USER"
     },
     "host": {
         "url": "http://localhost",

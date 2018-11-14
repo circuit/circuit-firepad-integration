@@ -66,7 +66,6 @@ async function createSession(item) {
                 timeCreated: timeCreated,
                 participants: participants,
                 creatorId: item.creatorId, // The creator of the session
-                // tokens: {},  // Used to keep track of active tokens for firebase
                 sessionParticipants: {} // Hash map of users who have joined the session
             };
             // Create a new session in firebase and send link to the users
@@ -82,6 +81,7 @@ async function createSession(item) {
                 // Will find the first text file and upload that
                 const attachment = item.attachments.find(a => a.mimeType === 'text/plain');
                 if (attachment) {
+                    sessions[conversation.convId].documentName = attachment.fileName;
                     const resp = await fetch(attachment.url, { headers: { 'Authorization': 'Bearer ' + client.accessToken }});
                     defaultText = await resp.text();
                 }
@@ -240,7 +240,7 @@ function uploadDocument(convId) {
                     const document = data.ops[0].text;
                     const endTime = Date.now();
                     const file = new File({
-                        name: `${endTime.toString()}.txt`,
+                        name: session.documentName || `${endTime.toString()}.txt`,
                         type: 'text/plain',
                         buffer: new Buffer(document)
                     });

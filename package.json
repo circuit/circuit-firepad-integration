@@ -10,14 +10,14 @@
   "author": "Richard Fazzio <richard.fazzio@atos.net>",
   "license": "ISC",
   "dependencies": {
-    "body-parser": "^1.18.3",
-    "circuit-sdk": "^1.2.4101",
-    "express": "^4.16.4",
-    "express-session": "^1.15.6",
+    "body-parser": "^1.19.0",
+    "circuit-sdk": "^1.2.6402",
+    "express": "^4.17.1",
+    "express-session": "^1.16.2",
     "file-api": "^0.10.4",
-    "firebase-admin": "^6.0.0",
-    "firepad": "^1.5.0",
-    "node-fetch": "^2.2.0",
+    "firebase-admin": "^8.3.0",
+    "firepad": "^1.5.3",
+    "node-fetch": "^2.6.0",
     "randomstring": "^1.1.5",
     "simple-oauth2": "^2.2.1"
   }

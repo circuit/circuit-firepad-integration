@@ -58,7 +58,6 @@ var app = new Vue({
         .catch(console.error);
     },
     endSession: function () {
-      debugger;
       fetch('/closesesssion', {
         method: 'POST',
         headers: {

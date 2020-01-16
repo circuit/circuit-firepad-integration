@@ -35,7 +35,6 @@ Vue.component('co-edit', {
           // this is only to initialize the document, it will work after that...
           const defaultText = cm.getValue();
           if (!defaultText.length && this.text !== defaultText) {
-            debugger;
             this.firepad.setText(this.text);
           }
         });
